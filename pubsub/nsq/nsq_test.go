@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dapr/components-contrib/metadata"
 	"github.com/dapr/components-contrib/pubsub"
 	"github.com/stretchr/testify/assert"
 )
@@ -34,7 +35,9 @@ func TestParseNSQMetadata(t *testing.T) {
 			"max_in_flight": "200",
 		}
 		fakeMetaData := pubsub.Metadata{
-			Properties: fakeProperties,
+			Base: metadata.Base{
+				Properties: fakeProperties,
+			},
 		}
 
 		// paser metadata

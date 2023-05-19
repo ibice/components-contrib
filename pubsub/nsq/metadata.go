@@ -18,7 +18,7 @@ import (
 	gnsq "github.com/nsqio/go-nsq"
 )
 
-type metadata struct {
+type nsqMetadata struct {
 	lookupdAddrs []string
 	addrs        []string
 	config       *gnsq.Config

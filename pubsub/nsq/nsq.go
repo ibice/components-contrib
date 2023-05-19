@@ -20,14 +20,15 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/dapr/components-contrib/metadata"
 	"github.com/dapr/components-contrib/pubsub"
 	"github.com/dapr/kit/logger"
 
-	"github.com/nsqio/go-nsq"
 	gnsq "github.com/nsqio/go-nsq"
 )
 
@@ -40,7 +41,7 @@ const (
 )
 
 type nsqPubSub struct {
-	metadata metadata
+	metadata nsqMetadata
 	pubs     []*gnsq.Producer
 	subs     []*subscriber
 
@@ -49,13 +50,13 @@ type nsqPubSub struct {
 
 var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-// NewNATSPubSub returns a new NATS pub-sub implementation
+// NewNSQPubSub returns a new NSQ pub-sub implementation
 func NewNSQPubSub(logger logger.Logger) pubsub.PubSub {
 	return &nsqPubSub{logger: logger}
 }
 
-func parseNSQMetadata(meta pubsub.Metadata) (metadata, error) {
-	m := metadata{
+func parseNSQMetadata(meta pubsub.Metadata) (nsqMetadata, error) {
+	m := nsqMetadata{
 		config: gnsq.NewConfig(),
 	}
 
@@ -92,8 +93,8 @@ func parseSubMetadata(datas map[string]string) (int, string) {
 	return concurrencys, chname
 }
 
-func (n *nsqPubSub) Init(metadata pubsub.Metadata) error {
-	meta, err := parseNSQMetadata(metadata)
+func (n *nsqPubSub) Init(ctx context.Context, nsqMetadata pubsub.Metadata) error {
+	meta, err := parseNSQMetadata(nsqMetadata)
 	if err != nil {
 		return err
 	}
@@ -120,7 +121,7 @@ func (n *nsqPubSub) Init(metadata pubsub.Metadata) error {
 	return nil
 }
 
-func (n *nsqPubSub) Publish(req *pubsub.PublishRequest) error {
+func (n *nsqPubSub) Publish(ctx context.Context, req *pubsub.PublishRequest) error {
 	n.logger.Debugf("[nsq] publish to %s", req.Topic)
 	p := n.pubs[rnd.Intn(len(n.pubs))]
 	err := p.Publish(req.Topic, req.Data)
@@ -130,16 +131,16 @@ func (n *nsqPubSub) Publish(req *pubsub.PublishRequest) error {
 	return nil
 }
 
-func (n *nsqPubSub) Subscribe(req pubsub.SubscribeRequest, handler pubsub.Handler) error {
+func (n *nsqPubSub) Subscribe(ctx context.Context, req pubsub.SubscribeRequest, handler pubsub.Handler) error {
 	concurrencys, chname := parseSubMetadata(req.Metadata)
-	c, err := nsq.NewConsumer(req.Topic, chname, n.metadata.config)
+	c, err := gnsq.NewConsumer(req.Topic, chname, n.metadata.config)
 	if err != nil {
 		return err
 	}
 
-	h := nsq.HandlerFunc(func(nm *nsq.Message) error {
+	h := gnsq.HandlerFunc(func(nm *gnsq.Message) error {
 		n.logger.Debugf("[nsq] recevied msg %s on %s", nm.ID, req.Topic)
-		return handler(context.Background(), &pubsub.NewMessage{Topic: req.Topic, Data: nm.Body})
+		return handler(ctx, &pubsub.NewMessage{Topic: req.Topic, Data: nm.Body})
 	})
 
 	c.AddConcurrentHandlers(h, concurrencys)
@@ -195,4 +196,12 @@ func (n *nsqPubSub) Close() error {
 
 func (n *nsqPubSub) Features() []pubsub.Feature {
 	return nil
+}
+
+// GetComponentMetadata returns the metadata of the component.
+func (n *nsqPubSub) GetComponentMetadata() map[string]string {
+	metadataStruct := nsqMetadata{}
+	metadataInfo := map[string]string{}
+	metadata.GetMetadataInfoFromStructType(reflect.TypeOf(metadataStruct), &metadataInfo, metadata.PubSubType)
+	return metadataInfo
 }
