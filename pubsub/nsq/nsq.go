@@ -47,9 +47,7 @@ type nsqPubSub struct {
 	logger logger.Logger
 }
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
+var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // NewNATSPubSub returns a new NATS pub-sub implementation
 func NewNSQPubSub(logger logger.Logger) pubsub.PubSub {
@@ -124,7 +122,7 @@ func (n *nsqPubSub) Init(metadata pubsub.Metadata) error {
 
 func (n *nsqPubSub) Publish(req *pubsub.PublishRequest) error {
 	n.logger.Debugf("[nsq] publish to %s", req.Topic)
-	p := n.pubs[rand.Intn(len(n.pubs))]
+	p := n.pubs[rnd.Intn(len(n.pubs))]
 	err := p.Publish(req.Topic, req.Data)
 	if err != nil {
 		return fmt.Errorf("nsq: error from publish: %s", err)
